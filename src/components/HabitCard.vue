@@ -1,0 +1,236 @@
+<template>
+  <div class="habit-card card">
+    <div class="habit-header">
+      <div class="habit-info">
+        <h3 class="habit-name font-semibold">{{ habit.name }}</h3>
+        <div class="habit-meta">
+          <span class="habit-frequency">{{ habit.frequency }}</span>
+          <span class="habit-separator">•</span>
+          <span class="habit-reminder">{{ habit.reminderTime || 'No reminder' }}</span>
+        </div>
+      </div>
+      <div class="habit-color" :style="{ backgroundColor: habit.color }"></div>
+    </div>
+    
+    <div v-if="habit.description" class="habit-description">
+      <p class="text-sm text-gray-600">{{ habit.description }}</p>
+    </div>
+    
+    <div class="habit-stats">
+      <div class="stat">
+        <span class="stat-label">Streak</span>
+        <span class="stat-value">{{ streak }} days</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Completion</span>
+        <span class="stat-value">{{ completionRate }}%</span>
+      </div>
+    </div>
+    
+    <div class="habit-actions">
+      <button
+        @click="toggleCompletion"
+        :class="[
+          'btn',
+          'w-full',
+          {
+            'btn-completed': todayCompletion?.completed,
+            'btn-primary': !todayCompletion?.completed
+          }
+        ]"
+      >
+        <span v-if="todayCompletion?.completed">✓ Completed Today</span>
+        <span v-else>Mark Complete</span>
+      </button>
+      
+      <div class="habit-controls">
+        <button @click="$emit('edit', habit)" class="btn btn-outline btn-sm">
+          Edit
+        </button>
+        <button @click="$emit('delete', habit.id)" class="btn btn-outline btn-sm">
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { computed } from 'vue'
+import { format, parseISO, isSameDay } from 'date-fns'
+
+export default {
+  name: 'HabitCard',
+  props: {
+    habit: {
+      type: Object,
+      required: true
+    },
+    completions: {
+      type: Array,
+      default: () => []
+    }
+  },
+  emits: ['edit', 'delete', 'toggle-completion'],
+  setup(props, { emit }) {
+    const todayCompletion = computed(() => {
+      const today = new Date()
+      const dateStr = format(today, 'yyyy-MM-dd')
+      return props.completions.find(c => 
+        c.habitId === props.habit.id && c.date === dateStr
+      )
+    })
+    
+    const streak = computed(() => {
+      const habitCompletions = props.completions
+        .filter(c => c.habitId === props.habit.id && c.completed)
+        .map(c => parseISO(c.date))
+        .sort((a, b) => b.getTime() - a.getTime())
+      
+      if (habitCompletions.length === 0) return 0
+      
+      let streak = 1
+      let currentDate = new Date(habitCompletions[0])
+      
+      for (let i = 1; i < habitCompletions.length; i++) {
+        const prevDate = new Date(currentDate)
+        prevDate.setDate(prevDate.getDate() - 1)
+        
+        if (isSameDay(prevDate, habitCompletions[i])) {
+          streak++
+          currentDate = habitCompletions[i]
+        } else {
+          break
+        }
+      }
+      
+      return streak
+    })
+    
+    const completionRate = computed(() => {
+      const totalCompletions = props.completions.filter(c => c.habitId === props.habit.id)
+      const completedCount = totalCompletions.filter(c => c.completed).length
+      return totalCompletions.length > 0 ? Math.round((completedCount / totalCompletions.length) * 100) : 0
+    })
+    
+    const toggleCompletion = () => {
+      emit('toggle-completion', props.habit.id, new Date())
+    }
+    
+    return {
+      todayCompletion,
+      streak,
+      completionRate,
+      toggleCompletion
+    }
+  }
+}
+</script>
+
+<style lang="scss" scoped>
+.habit-card {
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.habit-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.habit-info {
+  flex: 1;
+}
+
+.habit-name {
+  color: $primary-black;
+  margin-bottom: 0.5rem;
+}
+
+.habit-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: $gray-500;
+}
+
+.habit-separator {
+  color: $gray-400;
+}
+
+.habit-color {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.habit-description {
+  margin-bottom: 1rem;
+}
+
+.habit-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 0.5rem;
+}
+
+.stat {
+  text-align: center;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.75rem;
+  color: $gray-500;
+  margin-bottom: 0.25rem;
+}
+
+.stat-value {
+  display: block;
+  font-weight: 600;
+  color: $primary-black;
+}
+
+.habit-actions {
+  .btn {
+    margin-bottom: 0.75rem;
+  }
+  
+  &.btn-completed {
+    background: $gray-200;
+    color: $primary-black;
+    
+    &:hover {
+      background: $gray-300;
+    }
+  }
+}
+
+.habit-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.text-gray-600 {
+  color: $gray-600;
+}
+</style>
