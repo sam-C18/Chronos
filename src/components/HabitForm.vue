@@ -88,8 +88,8 @@ export default {
   emits: ['submit', 'cancel'],
   setup(_, { emit }) {
     const colors = [
-      '#000000', '#6c757d', '#495057', '#343a40',
-      '#212529', '#adb5bd', '#dee2e6', '#e9ecef'
+      '#df2531', '#f3701e', '#e8d8c9', '#ffed00',
+      '#9fd700', '#00a6c0', '#60519b', '#c837ab'
     ]
     
     const form = reactive({

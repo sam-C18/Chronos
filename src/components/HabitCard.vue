@@ -47,16 +47,28 @@
         <button @click="$emit('edit', habit)" class="btn btn-outline btn-sm">
           Edit
         </button>
-        <button @click="$emit('delete', habit.id)" class="btn btn-outline btn-sm">
-          Delete
+        <button @click="confirmDelete" class="btn btn-danger btn-sm delete-btn">
+          🗑️
         </button>
+      </div>
+      
+      <!-- Delete Confirmation Modal -->
+      <div v-if="showDeleteConfirm" class="delete-modal">
+        <div class="delete-modal-content">
+          <h3>Delete Habit</h3>
+          <p>Are you sure you want to delete "{{ habit.name }}"? This action cannot be undone.</p>
+          <div class="delete-modal-actions">
+            <button @click="cancelDelete" class="btn btn-outline btn-sm">Cancel</button>
+            <button @click="confirmDeleteAction" class="btn btn-danger btn-sm">Delete</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { format, parseISO, isSameDay } from 'date-fns'
 
 export default {
@@ -73,6 +85,20 @@ export default {
   },
   emits: ['edit', 'delete', 'toggle-completion'],
   setup(props, { emit }) {
+    const showDeleteConfirm = ref(false)
+    
+    const confirmDelete = () => {
+      showDeleteConfirm.value = true
+    }
+    
+    const cancelDelete = () => {
+      showDeleteConfirm.value = false
+    }
+    
+    const confirmDeleteAction = () => {
+      emit('delete', props.habit.id)
+      showDeleteConfirm.value = false
+    }
     const todayCompletion = computed(() => {
       const today = new Date()
       const dateStr = format(today, 'yyyy-MM-dd')
@@ -118,10 +144,14 @@ export default {
     }
     
     return {
+      showDeleteConfirm,
       todayCompletion,
       streak,
       completionRate,
-      toggleCompletion
+      toggleCompletion,
+      confirmDelete,
+      cancelDelete,
+      confirmDeleteAction
     }
   }
 }
@@ -220,6 +250,54 @@ export default {
 .habit-controls {
   display: flex;
   gap: 0.5rem;
+}
+
+.delete-btn {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  
+  &:hover {
+    background-color: #c82333;
+  }
+}
+
+.delete-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.delete-modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-width: 400px;
+  width: 90%;
+  
+  h3 {
+    color: #dc3545;
+    margin-bottom: 1rem;
+  }
+  
+  p {
+    color: #666;
+    margin-bottom: 1.5rem;
+  }
+}
+
+.delete-modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 .w-full {

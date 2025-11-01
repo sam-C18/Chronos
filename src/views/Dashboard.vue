@@ -4,6 +4,7 @@
     
     <Navbar 
       :active-tab="activeTab" 
+      :notifications="notifications"
       @tab-change="setActiveTab"
     />
     
@@ -12,6 +13,16 @@
         <!-- Dashboard Tab -->
         <transition name="fade" mode="out-in">
           <div v-if="activeTab === 'dashboard'" key="dashboard" class="dashboard-tab">
+            <!-- Dashboard Greetings -->
+            <div class="dashboard-greetings glass">
+              <h1 class="greetings-title font-display">
+                {{ getGreeting() }}, {{ getUserName() }}! 👋
+              </h1>
+              <p class="greetings-subtitle">
+                {{ getMotivationalMessage() }}
+              </p>
+            </div>
+            
             <div class="stats-grid">
               <div class="stat-card glass">
                 <h3 class="stat-title">Total Habits</h3>
@@ -27,26 +38,26 @@
               </div>
             </div>
             
+            <!-- Simple test content -->
+            <div class="test-content glass">
+              <h3>Dashboard Test</h3>
+              <p>If you can see this, the dashboard is working!</p>
+              <p>Habits count: {{ habits.length }}</p>
+              <p>Active tab: {{ activeTab }}</p>
+            </div>
+            
             <div class="chart-card glass">
               <h3 class="chart-title">Weekly Progress</h3>
               <div class="chart-container">
-                <div class="chart-placeholder">
-                  <div class="chart-bars">
-                    <div 
-                      v-for="(stat, index) in weeklyStats" 
-                      :key="index"
-                      class="chart-bar"
-                    >
-                      <div 
-                        class="bar-fill"
-                        :style="{ 
-                          height: `${(stat.completed / stat.total) * 100}%`,
-                          backgroundColor: stat.color
-                        }"
-                      ></div>
-                      <span class="bar-label">{{ stat.habit }}</span>
-                    </div>
-                  </div>
+                <div v-if="weeklyStats.length === 0" class="chart-placeholder">
+                  <p>No data available</p>
+                </div>
+                <div v-else>
+                  <Bar 
+                    :data="weeklyChartData" 
+                    :options="weeklyChartOptions"
+                    style="height: 300px;"
+                  />
                 </div>
               </div>
             </div>
@@ -55,18 +66,15 @@
               <div class="chart-card glass">
                 <h3 class="chart-title">Habit Distribution</h3>
                 <div class="pie-chart">
-                  <div class="pie-placeholder">
-                    <div class="pie-segments">
-                      <div 
-                        v-for="(habit, index) in habits" 
-                        :key="habit.id"
-                        class="pie-segment"
-                        :style="{ 
-                          backgroundColor: colors[index % colors.length],
-                          transform: `rotate(${getPieRotation(index)}deg)`
-                        }"
-                      ></div>
-                    </div>
+                  <div v-if="habits.length === 0" class="chart-placeholder">
+                    <p>No habits created yet</p>
+                  </div>
+                  <div v-else>
+                    <Doughnut 
+                      :data="habitDistributionData" 
+                      :options="habitDistributionOptions"
+                      style="height: 250px;"
+                    />
                   </div>
                 </div>
               </div>
@@ -74,15 +82,15 @@
               <div class="chart-card glass">
                 <h3 class="chart-title">Monthly Trend</h3>
                 <div class="line-chart">
-                  <div class="line-placeholder">
-                    <svg viewBox="0 0 300 150" class="line-svg">
-                      <polyline
-                        :points="monthlyTrendPoints"
-                        fill="none"
-                        stroke="#000000"
-                        stroke-width="2"
-                      />
-                    </svg>
+                  <div v-if="monthlyProgress.length === 0" class="chart-placeholder">
+                    <p>No progress data available</p>
+                  </div>
+                  <div v-else>
+                    <Line 
+                      :data="monthlyChartData" 
+                      :options="monthlyChartOptions"
+                      style="height: 250px;"
+                    />
                   </div>
                 </div>
               </div>
@@ -93,6 +101,8 @@
         <!-- Calendar Tab -->
         <transition name="fade" mode="out-in">
           <div v-if="activeTab === 'calendar'" key="calendar" class="calendar-tab">
+            <!-- Debug info -->
+            
             <div class="calendar-header">
               <h2 class="calendar-title font-display">
                 {{ formatDate(selectedDate, 'MMMM yyyy') }}
@@ -164,15 +174,15 @@
             <div class="chart-card glass">
               <h3 class="chart-title">Completion Trends</h3>
               <div class="line-chart">
-                <div class="line-placeholder">
-                  <svg viewBox="0 0 300 150" class="line-svg">
-                    <polyline
-                      :points="monthlyTrendPoints"
-                      fill="none"
-                      stroke="#000000"
-                      stroke-width="2"
-                    />
-                  </svg>
+                <div v-if="monthlyProgress.length === 0" class="chart-placeholder">
+                  <p>No progress data available</p>
+                </div>
+                <div v-else>
+                  <Line 
+                    :data="monthlyChartData" 
+                    :options="monthlyChartOptions"
+                    style="height: 300px;"
+                  />
                 </div>
               </div>
             </div>
@@ -185,6 +195,7 @@
                     v-for="habit in habits" 
                     :key="habit.id"
                     class="performance-item"
+                    @click="showHabitDetails(habit)"
                   >
                     <span class="performance-name">{{ habit.name }}</span>
                     <div class="performance-stats">
@@ -198,18 +209,15 @@
               <div class="chart-card glass">
                 <h3 class="chart-title">Weekly Distribution</h3>
                 <div class="pie-chart">
-                  <div class="pie-placeholder">
-                    <div class="pie-segments">
-                      <div 
-                        v-for="(stat, index) in weeklyStats" 
-                        :key="index"
-                        class="pie-segment"
-                        :style="{ 
-                          backgroundColor: stat.color,
-                          transform: `rotate(${getPieRotation(index)}deg)`
-                        }"
-                      ></div>
-                    </div>
+                  <div v-if="weeklyStats.length === 0" class="chart-placeholder">
+                    <p>No weekly data available</p>
+                  </div>
+                  <div v-else>
+                    <Doughnut 
+                      :data="weeklyDistributionData" 
+                      :options="weeklyDistributionOptions"
+                      style="height: 250px;"
+                    />
                   </div>
                 </div>
               </div>
@@ -232,9 +240,10 @@
             
             <transition name="slide-up">
               <HabitForm 
-                v-if="showNewHabitForm"
+                v-if="showNewHabitForm || editingHabit"
+                :habit="editingHabit"
                 @submit="createHabit"
-                @cancel="showNewHabitForm = false"
+                @cancel="showNewHabitForm = false; editingHabit = null"
               />
             </transition>
             
@@ -251,6 +260,42 @@
             </div>
           </div>
         </transition>
+        
+        <!-- Habit Details Modal -->
+        <div v-if="selectedHabitDetails" class="habit-details-modal">
+          <div class="habit-details-content">
+            <div class="habit-details-header">
+              <h2>{{ selectedHabitDetails.name }}</h2>
+              <button @click="closeHabitDetails" class="close-btn">×</button>
+            </div>
+            <div class="habit-details-body">
+              <div class="habit-details-info">
+                <p><strong>Description:</strong> {{ selectedHabitDetails.description || 'No description' }}</p>
+                <p><strong>Frequency:</strong> {{ selectedHabitDetails.frequency }}</p>
+                <p><strong>Reminder Time:</strong> {{ selectedHabitDetails.reminderTime || 'No reminder set' }}</p>
+                <p><strong>Created:</strong> {{ formatDate(parseISO(selectedHabitDetails.createdAt), 'PPP') }}</p>
+              </div>
+              <div class="habit-details-stats">
+                <div class="stat-item">
+                  <span class="stat-label">Current Streak</span>
+                  <span class="stat-value">{{ calculateStreak(selectedHabitDetails.id) }} days</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Completion Rate</span>
+                  <span class="stat-value">{{ getHabitCompletionRate(selectedHabitDetails.id) }}%</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Total Completions</span>
+                  <span class="stat-value">{{ getTotalCompletions(selectedHabitDetails.id) }}</span>
+                </div>
+              </div>
+              <div class="habit-details-actions">
+                <button @click="editHabit(selectedHabitDetails)" class="btn btn-primary">Edit Habit</button>
+                <button @click="closeHabitDetails" class="btn btn-outline">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -258,10 +303,37 @@
 
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
-import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday, parseISO } from 'date-fns'
+import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday as isDateToday, parseISO } from 'date-fns'
 import Navbar from '../components/Navbar.vue'
 import HabitCard from '../components/HabitCard.vue'
 import HabitForm from '../components/HabitForm.vue'
+// Import Chart.js components
+import { Bar, Doughnut, Line } from 'vue-chartjs'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js'
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+)
 
 const MOTIVATIONAL_MESSAGES = [
   "Great job on maintaining your streak! Keep going!",
@@ -270,7 +342,15 @@ const MOTIVATIONAL_MESSAGES = [
   "Progress, not perfection. You're doing great!",
   "Small habits create big changes. Stay consistent!",
   "Your future self will thank you for today's efforts!",
-  "You've completed 70% of your weekly goals! Amazing!"
+  "You've completed 70% of your weekly goals! Amazing!",
+  "Building habits is like building muscles - it takes time but gets stronger!",
+  "Each day is a new opportunity to be better than yesterday!",
+  "The secret to getting ahead is getting started!",
+  "Success is the sum of small efforts repeated day in and day out!",
+  "You're not just building habits, you're building character!",
+  "Every expert was once a beginner. Keep going!",
+  "The best time to plant a tree was 20 years ago. The second best time is now!",
+  "Your habits shape your identity, and your identity shapes your habits!"
 ]
 
 const COLORS = ['#000000', '#6c757d', '#495057', '#343a40', '#212529', '#adb5bd', '#dee2e6']
@@ -280,7 +360,10 @@ export default {
   components: {
     Navbar,
     HabitCard,
-    HabitForm
+    HabitForm,
+    Bar,
+    Doughnut,
+    Line
   },
   setup() {
     const activeTab = ref('dashboard')
@@ -289,6 +372,8 @@ export default {
     const completions = ref([])
     const notifications = ref([])
     const showNewHabitForm = ref(false)
+    const editingHabit = ref(null)
+    const selectedHabitDetails = ref(null)
     
     // Computed properties
     const weekDays = computed(() => {
@@ -333,6 +418,19 @@ export default {
       })
     })
     
+    const monthlyProgress = computed(() => {
+      const monthStart = new Date(selectedDate.value.getFullYear(), selectedDate.value.getMonth(), 1)
+      const monthEnd = new Date(selectedDate.value.getFullYear(), selectedDate.value.getMonth() + 1, 0)
+      const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
+      
+      return monthDays.map(day => ({
+        date: format(day, 'MMM dd'),
+        completed: completions.value.filter(c => 
+          c.completed && isSameDay(parseISO(c.date), day)
+        ).length
+      }))
+    })
+    
     const monthlyTrendPoints = computed(() => {
       const monthStart = new Date(selectedDate.value.getFullYear(), selectedDate.value.getMonth(), 1)
       const monthEnd = new Date(selectedDate.value.getFullYear(), selectedDate.value.getMonth() + 1, 0)
@@ -352,6 +450,154 @@ export default {
       return points
     })
     
+    // Chart.js data and options
+    const weeklyChartData = computed(() => ({
+      labels: weeklyStats.value.map(stat => stat.habit),
+      datasets: [{
+        label: 'Completed',
+        data: weeklyStats.value.map(stat => stat.completed),
+        backgroundColor: weeklyStats.value.map(stat => stat.color),
+        borderColor: weeklyStats.value.map(stat => stat.color),
+        borderWidth: 1
+      }]
+    }))
+    
+    const weeklyChartOptions = computed(() => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: true,
+            color: 'rgba(0, 0, 0, 0.1)',
+            lineWidth: 1
+          },
+          ticks: {
+            color: '#666'
+          }
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            display: true,
+            color: 'rgba(0, 0, 0, 0.1)',
+            lineWidth: 1
+          },
+          ticks: {
+            stepSize: 1,
+            color: '#666'
+          }
+        }
+      },
+      elements: {
+        bar: {
+          borderRadius: 4,
+          borderSkipped: false
+        }
+      }
+    }))
+    
+    const habitDistributionData = computed(() => ({
+      labels: habits.value.map(habit => habit.name),
+      datasets: [{
+        data: habits.value.map(habit => calculateStreak(habit.id)),
+        backgroundColor: habits.value.map((habit, index) => COLORS[index % COLORS.length]),
+        borderColor: habits.value.map((habit, index) => COLORS[index % COLORS.length]),
+        borderWidth: 1
+      }]
+    }))
+    
+    const habitDistributionOptions = computed(() => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      }
+    }))
+    
+    const monthlyChartData = computed(() => ({
+      labels: monthlyProgress.value.map(item => item.date),
+      datasets: [{
+        label: 'Completed',
+        data: monthlyProgress.value.map(item => item.completed),
+        borderColor: '#000000',
+        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+        tension: 0.4,
+        fill: true
+      }]
+    }))
+    
+    const monthlyChartOptions = computed(() => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: true,
+            color: 'rgba(0, 0, 0, 0.1)',
+            lineWidth: 1
+          },
+          ticks: {
+            color: '#666'
+          }
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            display: true,
+            color: 'rgba(0, 0, 0, 0.1)',
+            lineWidth: 1
+          },
+          ticks: {
+            stepSize: 1,
+            color: '#666'
+          }
+        }
+      },
+      elements: {
+        line: {
+          tension: 0.4,
+          borderWidth: 3
+        },
+        point: {
+          radius: 4,
+          hoverRadius: 6
+        }
+      }
+    }))
+    
+    const weeklyDistributionData = computed(() => ({
+      labels: weeklyStats.value.map(stat => stat.habit),
+      datasets: [{
+        data: weeklyStats.value.map(stat => stat.completed),
+        backgroundColor: weeklyStats.value.map(stat => stat.color),
+        borderColor: weeklyStats.value.map(stat => stat.color),
+        borderWidth: 1
+      }]
+    }))
+    
+    const weeklyDistributionOptions = computed(() => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      }
+    }))
+    
     // Methods
     const setActiveTab = (tab) => {
       activeTab.value = tab
@@ -362,7 +608,7 @@ export default {
     }
     
     const isToday = (date) => {
-      return isToday(date)
+      return isDateToday(date)
     }
     
     const getHabitCompletion = (habitId, date) => {
@@ -412,8 +658,13 @@ export default {
         c.habitId === habitId && c.date === dateStr
       )
       
+      const habit = habits.value.find(h => h.id === habitId)
+      
       if (existing) {
         existing.completed = !existing.completed
+        if (existing.completed) {
+          addNotification(`Great job completing "${habit.name}"!`, 'success')
+        }
       } else {
         completions.value.push({
           id: Date.now().toString(),
@@ -421,6 +672,15 @@ export default {
           date: dateStr,
           completed: true
         })
+        addNotification(`Excellent! You completed "${habit.name}"!`, 'success')
+      }
+      
+      // Check for streak milestones
+      const streak = calculateStreak(habitId)
+      if (streak > 0 && streak % 7 === 0) {
+        addNotification(`🎉 Amazing! You've maintained "${habit.name}" for ${streak} days straight!`, 'motivational')
+      } else if (streak > 0 && streak % 30 === 0) {
+        addNotification(`🏆 Incredible! "${habit.name}" streak: ${streak} days! You're unstoppable!`, 'motivational')
       }
       
       // Save to localStorage
@@ -428,31 +688,50 @@ export default {
     }
     
     const createHabit = (habitData) => {
-      const habit = {
-        id: Date.now().toString(),
-        name: habitData.name,
-        description: habitData.description,
-        frequency: habitData.frequency,
-        schedule: habitData.schedule || [],
-        reminderTime: habitData.reminderTime,
-        color: habitData.color,
-        createdAt: new Date().toISOString(),
-        targetDays: habitData.frequency === 'daily' ? 7 : habitData.targetDays
+      if (habitData.id) {
+        // Update existing habit
+        const index = habits.value.findIndex(h => h.id === habitData.id)
+        if (index !== -1) {
+          habits.value[index] = {
+            ...habits.value[index],
+            name: habitData.name,
+            description: habitData.description,
+            frequency: habitData.frequency,
+            schedule: habitData.schedule || [],
+            reminderTime: habitData.reminderTime,
+            color: habitData.color,
+            targetDays: habitData.frequency === 'daily' ? 7 : habitData.targetDays
+          }
+          addNotification(`Habit "${habitData.name}" updated successfully!`, 'success')
+        }
+        editingHabit.value = null
+      } else {
+        // Create new habit
+        const habit = {
+          id: Date.now().toString(),
+          name: habitData.name,
+          description: habitData.description,
+          frequency: habitData.frequency,
+          schedule: habitData.schedule || [],
+          reminderTime: habitData.reminderTime,
+          color: habitData.color,
+          createdAt: new Date().toISOString(),
+          targetDays: habitData.frequency === 'daily' ? 7 : habitData.targetDays
+        }
+        
+        habits.value.push(habit)
+        showNewHabitForm.value = false
+        
+        // Add notification
+        addNotification(`Habit "${habit.name}" created successfully!`, 'success')
       }
-      
-      habits.value.push(habit)
-      showNewHabitForm.value = false
       
       // Save to localStorage
       localStorage.setItem('habits', JSON.stringify(habits.value))
-      
-      // Add notification
-      addNotification(`Habit "${habit.name}" created successfully!`, 'success')
     }
     
     const editHabit = (habit) => {
-      // Implementation for editing habits
-      console.log('Edit habit:', habit)
+      editingHabit.value = habit
     }
     
     const deleteHabit = (habitId) => {
@@ -465,16 +744,27 @@ export default {
     }
     
     const addNotification = (message, type = 'info') => {
-      notifications.value.unshift({
+      const notification = {
         id: Date.now().toString(),
         message,
         type,
         read: false,
         timestamp: new Date().toISOString()
-      })
+      }
+      
+      notifications.value.unshift(notification)
       
       // Save to localStorage
       localStorage.setItem('notifications', JSON.stringify(notifications.value))
+      
+      // Auto-remove notification after 10 seconds
+      setTimeout(() => {
+        const index = notifications.value.findIndex(n => n.id === notification.id)
+        if (index !== -1) {
+          notifications.value.splice(index, 1)
+          localStorage.setItem('notifications', JSON.stringify(notifications.value))
+        }
+      }, 10000)
     }
     
     const previousWeek = () => {
@@ -489,8 +779,62 @@ export default {
       selectedDate.value = new Date()
     }
     
+    const getGreeting = () => {
+      const hour = new Date().getHours()
+      if (hour < 12) return 'Good Morning'
+      if (hour < 17) return 'Good Afternoon'
+      return 'Good Evening'
+    }
+    
+    const getUserName = () => {
+      const user = localStorage.getItem('user')
+      if (user) {
+        try {
+          const userData = JSON.parse(user)
+          return userData.name || 'User'
+        } catch {
+          return 'User'
+        }
+      }
+      return 'User'
+    }
+    
+    const getMotivationalMessage = () => {
+      const messages = [
+        "Ready to build some amazing habits today?",
+        "Every small step counts towards your goals!",
+        "You're doing great! Keep up the momentum!",
+        "Today is a perfect day to make progress!",
+        "Your future self will thank you for today's efforts!"
+      ]
+      return messages[Math.floor(Math.random() * messages.length)]
+    }
+    
+    const showHabitDetails = (habit) => {
+      selectedHabitDetails.value = habit
+    }
+    
+    const closeHabitDetails = () => {
+      selectedHabitDetails.value = null
+    }
+    
+    const getTotalCompletions = (habitId) => {
+      return completions.value.filter(c => c.habitId === habitId && c.completed).length
+    }
+    
     // Load data from localStorage
     onMounted(() => {
+      // Check if user is authenticated
+      const user = localStorage.getItem('user')
+      if (!user) {
+        console.log('No user found, redirecting to login')
+        // Redirect to login if no user
+        window.location.href = '/'
+        return
+      }
+      
+      console.log('Dashboard mounted, user:', JSON.parse(user))
+      
       const savedHabits = localStorage.getItem('habits')
       const savedCompletions = localStorage.getItem('completions')
       const savedNotifications = localStorage.getItem('notifications')
@@ -506,13 +850,30 @@ export default {
       
       // Add motivational notifications periodically
       setInterval(() => {
-        if (Math.random() > 0.7) {
+        if (Math.random() > 0.8) { // 20% chance every 5 minutes
           addNotification(
             MOTIVATIONAL_MESSAGES[Math.floor(Math.random() * MOTIVATIONAL_MESSAGES.length)],
             'motivational'
           )
         }
       }, 300000) // Every 5 minutes
+      
+      // Add daily progress notifications
+      setInterval(() => {
+        const totalHabits = habits.value.length
+        const completedToday = completions.value.filter(c => 
+          c.completed && isSameDay(parseISO(c.date), new Date())
+        ).length
+        
+        if (totalHabits > 0) {
+          const completionRate = (completedToday / totalHabits) * 100
+          if (completionRate >= 80) {
+            addNotification(`🎯 Outstanding! You completed ${completionRate.toFixed(0)}% of your habits today!`, 'motivational')
+          } else if (completionRate >= 50) {
+            addNotification(`👍 Good progress! You're ${completionRate.toFixed(0)}% complete today!`, 'info')
+          }
+        }
+      }, 60000) // Check every minute
     })
     
     // Save data to localStorage when data changes
@@ -529,12 +890,22 @@ export default {
       completions,
       notifications,
       showNewHabitForm,
+      editingHabit,
       weekDays,
       maxStreak,
       completionRate,
       weeklyStats,
+      monthlyProgress,
       monthlyTrendPoints,
       colors: COLORS,
+      weeklyChartData,
+      weeklyChartOptions,
+      habitDistributionData,
+      habitDistributionOptions,
+      monthlyChartData,
+      monthlyChartOptions,
+      weeklyDistributionData,
+      weeklyDistributionOptions,
       setActiveTab,
       formatDate,
       isToday,
@@ -548,13 +919,22 @@ export default {
       deleteHabit,
       previousWeek,
       nextWeek,
-      goToToday
+      goToToday,
+      getGreeting,
+      getUserName,
+      getMotivationalMessage,
+      selectedHabitDetails,
+      showHabitDetails,
+      closeHabitDetails,
+      getTotalCompletions
     }
   }
 }
 </script>
 
 <style lang="scss" scoped>
+@import '../styles/main.scss';
+
 .dashboard {
   min-height: 100vh;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
@@ -569,6 +949,31 @@ export default {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 2rem;
+}
+
+// Dashboard Greetings
+.dashboard-greetings {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 1rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.greetings-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: $primary-black;
+  margin-bottom: 0.5rem;
+}
+
+.greetings-subtitle {
+  font-size: 1.1rem;
+  color: $gray-600;
+  font-style: italic;
 }
 
 // Stats Grid
@@ -603,6 +1008,26 @@ export default {
   font-family: $font-display;
 }
 
+.test-content {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 1rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  
+  h3 {
+    color: $primary-black;
+    margin-bottom: 1rem;
+  }
+  
+  p {
+    color: $gray-600;
+    margin-bottom: 0.5rem;
+  }
+}
+
 // Charts
 .chart-card {
   background: rgba(255, 255, 255, 0.9);
@@ -628,9 +1053,11 @@ export default {
 .chart-placeholder {
   height: 100%;
   display: flex;
-  align-items: end;
-  justify-content: space-around;
+  align-items: center;
+  justify-content: center;
   padding: 1rem;
+  color: $gray-500;
+  font-style: italic;
 }
 
 .chart-bars {
@@ -838,6 +1265,13 @@ export default {
   padding: 0.75rem;
   background: rgba(0, 0, 0, 0.02);
   border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(0, 0, 0, 0.05);
+    transform: translateX(4px);
+  }
 }
 
 .performance-name {
@@ -910,5 +1344,106 @@ export default {
   .habits-grid {
     grid-template-columns: 1fr;
   }
+}
+
+// Habit Details Modal
+.habit-details-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.habit-details-content {
+  background: white;
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.habit-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  
+  h2 {
+    color: $primary-black;
+    margin: 0;
+  }
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: $gray-500;
+  cursor: pointer;
+  padding: 0.25rem;
+  
+  &:hover {
+    color: $primary-black;
+  }
+}
+
+.habit-details-body {
+  padding: 1.5rem;
+}
+
+.habit-details-info {
+  margin-bottom: 1.5rem;
+  
+  p {
+    margin-bottom: 0.75rem;
+    color: $gray-600;
+    
+    strong {
+      color: $primary-black;
+    }
+  }
+}
+
+.habit-details-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 0.5rem;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.75rem;
+  color: $gray-500;
+  margin-bottom: 0.25rem;
+}
+
+.stat-value {
+  display: block;
+  font-weight: 600;
+  color: $primary-black;
+  font-size: 1.25rem;
+}
+
+.habit-details-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
 }
 </style>
