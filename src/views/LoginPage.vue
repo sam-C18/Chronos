@@ -18,7 +18,9 @@
               class="input"
               placeholder="Enter your email"
               required
+              @blur="checkEmail"
             />
+            <p v-if="errors.email" class="error-message">{{ errors.email }}</p>
           </div>
           
           <div class="form-group">
@@ -31,11 +33,14 @@
               placeholder="Enter your password"
               required
             />
+            <p v-if="errors.password" class="error-message">{{ errors.password }}</p>
           </div>
           
+          <p v-if="errors.general" class="error-message general">{{ errors.general }}</p>
+          
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary btn-lg w-full">
-              {{ isLogin ? 'Sign In' : 'Sign Up' }}
+            <button type="submit" class="btn btn-primary btn-lg w-full" :disabled="loading">
+              {{ loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Sign Up') }}
             </button>
           </div>
           
@@ -60,6 +65,7 @@
 <script>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 
 export default {
   name: 'LoginPage',
@@ -72,25 +78,126 @@ export default {
       password: ''
     })
     
+    const errors = reactive({
+      email: '',
+      password: '',
+      general: ''
+    })
+    
+    const loading = ref(false)
+    const emailChecked = ref(false)
+    const emailExists = ref(false)
+    
     const toggleMode = () => {
       isLogin.value = !isLogin.value
+      // Reset errors when switching modes
+      errors.email = ''
+      errors.password = ''
+      errors.general = ''
+      emailChecked.value = false
     }
     
-    const handleSubmit = () => {
-      // Simple authentication simulation
-      if (form.email && form.password) {
-        localStorage.setItem('user', JSON.stringify({
-          email: form.email,
-          name: form.email.split('@')[0]
-        }))
-        router.push('/dashboard')
+    const checkEmail = async () => {
+      if (!form.email) return
+      
+      try {
+        const response = await axios.get(`http://localhost:3000/api/check-email?email=${form.email}`)
+        emailExists.value = response.data.exists
+        emailChecked.value = true
+        
+        if (isLogin.value) {
+          if (!emailExists.value) {
+            errors.email = 'No account found with this email. Please sign up.'
+          } else {
+            errors.email = ''
+          }
+        } else {
+          if (emailExists.value) {
+            errors.email = 'An account with this email already exists. Please sign in.'
+          } else {
+            errors.email = ''
+          }
+        }
+      } catch (error) {
+        console.error('Error checking email:', error)
+        errors.email = 'Error checking email availability'
       }
+    }
+    
+    const handleSubmit = async () => {
+      // Reset errors
+      errors.general = ''
+      errors.password = ''
+      
+      if (!form.email || !form.password) {
+        errors.general = 'Please fill in all fields'
+        return
+      }
+      
+      loading.value = true
+      
+      try {
+        let response
+        if (isLogin.value) {
+          response = await axios.post('http://localhost:3000/api/login', {
+            email: form.email,
+            password: form.password
+          })
+          // Clear any existing user data before setting new user
+          clearUserData()
+          localStorage.setItem('user', JSON.stringify(response.data.user))
+          router.push('/dashboard')
+        } else {
+          response = await axios.post('http://localhost:3000/api/signup', {
+            email: form.email,
+            password: form.password
+          })
+          // Clear any existing user data before setting new user
+          clearUserData()
+          // After signup, automatically log in
+          const loginResponse = await axios.post('http://localhost:3000/api/login', {
+            email: form.email,
+            password: form.password
+          })
+          localStorage.setItem('user', JSON.stringify(loginResponse.data.user))
+          router.push('/dashboard')
+        }
+      } catch (error) {
+        if (error.response) {
+          if (error.response.status === 409) {
+            errors.email = error.response.data.error
+          } else if (error.response.status === 404) {
+            errors.email = error.response.data.error
+          } else if (error.response.status === 401) {
+            errors.password = error.response.data.error
+          } else {
+            errors.general = error.response.data.error || 'An error occurred'
+          }
+        } else {
+          errors.general = 'Network error. Please try again.'
+        }
+      } finally {
+        loading.value = false
+      }
+    }
+    
+    const clearUserData = () => {
+      // Clear all user-specific data from localStorage
+      localStorage.removeItem('habits')
+      localStorage.removeItem('completions')
+      localStorage.removeItem('notifications')
+      // Keep the user data as it will be updated
     }
     
     return {
       isLogin,
       form,
+      errors,
+      loading,
+      emailChecked,
+      emailExists,
       toggleMode,
+      checkEmail,
       handleSubmit
     }
   }
@@ -137,6 +244,17 @@ export default {
     margin-bottom: 0.5rem;
     font-weight: 500;
     color: $primary-black;
+  }
+  
+  .error-message {
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+    
+    &.general {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
   }
   
   .form-actions {

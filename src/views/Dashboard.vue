@@ -11,17 +11,19 @@
     <div class="dashboard-content">
       <div class="container">
         <!-- Dashboard Tab -->
-        <transition name="fade" mode="out-in">
+        <transition name="fade" mode="out-in" delay="20000">
           <div v-if="activeTab === 'dashboard'" key="dashboard" class="dashboard-tab">
             <!-- Dashboard Greetings -->
-            <div class="dashboard-greetings glass">
-              <h1 class="greetings-title font-display">
-                {{ getGreeting() }}, {{ getUserName() }}! 👋
-              </h1>
-              <p class="greetings-subtitle">
-                {{ getMotivationalMessage() }}
-              </p>
-            </div>
+            <transition name="greeting-fade" appear delay="2000">
+              <div class="dashboard-greetings glass">
+                <h1 class="greetings-title font-display">
+                  {{ getGreeting() }}, {{ getUserName() }}! 👋
+                </h1>
+                <p class="greetings-subtitle">
+                  {{ getMotivationalMessage() }}
+                </p>
+              </div>
+            </transition>
             
             <div class="stats-grid">
               <div class="stat-card glass">
@@ -37,15 +39,6 @@
                 <p class="stat-value">{{ completionRate }}%</p>
               </div>
             </div>
-            
-            <!-- Simple test content -->
-            <div class="test-content glass">
-              <h3>Dashboard Test</h3>
-              <p>If you can see this, the dashboard is working!</p>
-              <p>Habits count: {{ habits.length }}</p>
-              <p>Active tab: {{ activeTab }}</p>
-            </div>
-            
             <div class="chart-card glass">
               <h3 class="chart-title">Weekly Progress</h3>
               <div class="chart-container">
@@ -304,6 +297,7 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday as isDateToday, parseISO } from 'date-fns'
+import axios from 'axios'
 import Navbar from '../components/Navbar.vue'
 import HabitCard from '../components/HabitCard.vue'
 import HabitForm from '../components/HabitForm.vue'
@@ -652,117 +646,176 @@ export default {
       return (index * 360) / habits.value.length
     }
     
-    const toggleHabitCompletion = (habitId, date) => {
+    const toggleHabitCompletion = async (habitId, date) => {
       const dateStr = format(date, 'yyyy-MM-dd')
       const existing = completions.value.find(c => 
         c.habitId === habitId && c.date === dateStr
       )
       
       const habit = habits.value.find(h => h.id === habitId)
+      const completed = existing ? !existing.completed : true
       
-      if (existing) {
-        existing.completed = !existing.completed
-        if (existing.completed) {
+      try {
+        await apiCall('post', '/api/completions', {
+          habitId: parseInt(habitId),
+          date: dateStr,
+          completed
+        })
+        
+        // Update local state
+        if (existing) {
+          existing.completed = completed
+        } else {
+          completions.value.push({
+            id: Date.now().toString(),
+            habitId,
+            date: dateStr,
+            completed: true
+          })
+        }
+        
+        if (completed) {
           addNotification(`Great job completing "${habit.name}"!`, 'success')
         }
-      } else {
-        completions.value.push({
-          id: Date.now().toString(),
-          habitId,
-          date: dateStr,
-          completed: true
-        })
-        addNotification(`Excellent! You completed "${habit.name}"!`, 'success')
+        
+        // Check for streak milestones
+        const streak = calculateStreak(habitId)
+        if (streak > 0 && streak % 7 === 0) {
+          addNotification(`🎉 Amazing! You've maintained "${habit.name}" for ${streak} days straight!`, 'motivational')
+        } else if (streak > 0 && streak % 30 === 0) {
+          addNotification(`🏆 Incredible! "${habit.name}" streak: ${streak} days! You're unstoppable!`, 'motivational')
+        }
+      } catch (error) {
+        console.warn('API call failed, updating local state only:', error)
+        // Still update local state even if API fails
+        if (existing) {
+          existing.completed = completed
+        } else {
+          completions.value.push({
+            id: Date.now().toString(),
+            habitId,
+            date: dateStr,
+            completed: true
+          })
+        }
+        
+        if (completed) {
+          addNotification(`Great job completing "${habit.name}"!`, 'success')
+        }
       }
-      
-      // Check for streak milestones
-      const streak = calculateStreak(habitId)
-      if (streak > 0 && streak % 7 === 0) {
-        addNotification(`🎉 Amazing! You've maintained "${habit.name}" for ${streak} days straight!`, 'motivational')
-      } else if (streak > 0 && streak % 30 === 0) {
-        addNotification(`🏆 Incredible! "${habit.name}" streak: ${streak} days! You're unstoppable!`, 'motivational')
-      }
-      
-      // Save to localStorage
-      localStorage.setItem('completions', JSON.stringify(completions.value))
     }
     
-    const createHabit = (habitData) => {
-      if (habitData.id) {
-        // Update existing habit
-        const index = habits.value.findIndex(h => h.id === habitData.id)
-        if (index !== -1) {
-          habits.value[index] = {
-            ...habits.value[index],
+    const createHabit = async (habitData) => {
+      try {
+        if (habitData.id) {
+          // Update existing habit
+          await apiCall('put', `/api/habits/${habitData.id}`, {
             name: habitData.name,
             description: habitData.description,
             frequency: habitData.frequency,
-            schedule: habitData.schedule || [],
-            reminderTime: habitData.reminderTime,
-            color: habitData.color,
-            targetDays: habitData.frequency === 'daily' ? 7 : habitData.targetDays
+            color: habitData.color
+          })
+          
+          // Update local state
+          const index = habits.value.findIndex(h => h.id === habitData.id)
+          if (index !== -1) {
+            habits.value[index] = {
+              ...habits.value[index],
+              name: habitData.name,
+              description: habitData.description,
+              frequency: habitData.frequency,
+              color: habitData.color
+            }
           }
           addNotification(`Habit "${habitData.name}" updated successfully!`, 'success')
+          editingHabit.value = null
+        } else {
+          // Try to create habit via API
+          let habitId
+          try {
+            const response = await apiCall('post', '/api/habits', {
+              name: habitData.name,
+              description: habitData.description,
+              frequency: habitData.frequency,
+              color: habitData.color
+            })
+            habitId = response.data.id
+          } catch (apiError) {
+            console.warn('API call failed, falling back to localStorage:', apiError)
+            // Fallback to localStorage if API fails
+            habitId = Date.now().toString()
+          }
+          
+          const habit = {
+            id: habitId,
+            name: habitData.name,
+            description: habitData.description,
+            frequency: habitData.frequency,
+            color: habitData.color,
+            created_at: new Date().toISOString()
+          }
+          
+          habits.value.push(habit)
+          showNewHabitForm.value = false
+          
+          // Add notification
+          addNotification(`Habit "${habit.name}" created successfully!`, 'success')
         }
-        editingHabit.value = null
-      } else {
-        // Create new habit
-        const habit = {
-          id: Date.now().toString(),
-          name: habitData.name,
-          description: habitData.description,
-          frequency: habitData.frequency,
-          schedule: habitData.schedule || [],
-          reminderTime: habitData.reminderTime,
-          color: habitData.color,
-          createdAt: new Date().toISOString(),
-          targetDays: habitData.frequency === 'daily' ? 7 : habitData.targetDays
-        }
-        
-        habits.value.push(habit)
-        showNewHabitForm.value = false
-        
-        // Add notification
-        addNotification(`Habit "${habit.name}" created successfully!`, 'success')
+      } catch (error) {
+        console.error('Error saving habit:', error)
+        addNotification('Error saving habit. Please try again.', 'error')
       }
-      
-      // Save to localStorage
-      localStorage.setItem('habits', JSON.stringify(habits.value))
     }
     
     const editHabit = (habit) => {
       editingHabit.value = habit
     }
     
-    const deleteHabit = (habitId) => {
-      habits.value = habits.value.filter(h => h.id !== habitId)
-      completions.value = completions.value.filter(c => c.habitId !== habitId)
-      
-      // Save to localStorage
-      localStorage.setItem('habits', JSON.stringify(habits.value))
-      localStorage.setItem('completions', JSON.stringify(completions.value))
+    const deleteHabit = async (habitId) => {
+      try {
+        await apiCall('delete', `/api/habits/${habitId}`)
+        
+        // Update local state
+        habits.value = habits.value.filter(h => h.id !== habitId)
+        completions.value = completions.value.filter(c => c.habitId !== habitId)
+        
+        addNotification('Habit deleted successfully!', 'success')
+      } catch (error) {
+        console.warn('API call failed, updating local state only:', error)
+        // Still update local state even if API fails
+        habits.value = habits.value.filter(h => h.id !== habitId)
+        completions.value = completions.value.filter(c => c.habitId !== habitId)
+        
+        addNotification('Habit deleted successfully!', 'success')
+      }
     }
     
-    const addNotification = (message, type = 'info') => {
+    const addNotification = async (message, type = 'info') => {
       const notification = {
         id: Date.now().toString(),
         message,
         type,
         read: false,
-        timestamp: new Date().toISOString()
+        created_at: new Date().toISOString()
       }
       
       notifications.value.unshift(notification)
       
-      // Save to localStorage
-      localStorage.setItem('notifications', JSON.stringify(notifications.value))
+      // Try to save to backend, but don't fail if it doesn't work
+      try {
+        await apiCall('post', '/api/notifications', {
+          message,
+          type
+        })
+      } catch (error) {
+        console.warn('Failed to save notification to backend:', error)
+      }
       
       // Auto-remove notification after 10 seconds
       setTimeout(() => {
         const index = notifications.value.findIndex(n => n.id === notification.id)
         if (index !== -1) {
           notifications.value.splice(index, 1)
-          localStorage.setItem('notifications', JSON.stringify(notifications.value))
         }
       }, 10000)
     }
@@ -822,8 +875,68 @@ export default {
       return completions.value.filter(c => c.habitId === habitId && c.completed).length
     }
     
-    // Load data from localStorage
-    onMounted(() => {
+    // API helper functions
+    const getUserId = () => {
+      const user = localStorage.getItem('user')
+      return user ? JSON.parse(user).id : null
+    }
+    
+    const apiCall = async (method, url, data = null) => {
+      const userId = getUserId()
+      if (!userId) throw new Error('User not authenticated')
+      
+      const config = {
+        method,
+        url: `http://localhost:3000${url}`,
+        headers: {
+          'user-id': userId,
+          'Content-Type': 'application/json'
+        }
+      }
+      
+      if (data) config.data = data
+      
+      return axios(config)
+    }
+    
+    const loadDataFromBackend = async () => {
+      try {
+        const [habitsRes, completionsRes, notificationsRes] = await Promise.all([
+          apiCall('get', '/api/habits'),
+          apiCall('get', '/api/completions'),
+          apiCall('get', '/api/notifications')
+        ])
+        
+        habits.value = habitsRes.data
+        completions.value = completionsRes.data.map(c => ({
+          ...c,
+          habitId: c.habit_id,
+          completed: Boolean(c.completed)
+        }))
+        notifications.value = notificationsRes.data.map(n => ({
+          ...n,
+          read: Boolean(n.read)
+        }))
+        
+        // Add initial notification if none exist
+        if (notifications.value.length === 0) {
+          await addNotification("Welcome to your habit tracker! Let's build some great habits together!", 'info')
+        }
+      } catch (error) {
+        console.error('Error loading data from backend, falling back to localStorage:', error)
+        // Fallback to localStorage if backend fails
+        const savedHabits = localStorage.getItem('habits')
+        const savedCompletions = localStorage.getItem('completions')
+        const savedNotifications = localStorage.getItem('notifications')
+        
+        if (savedHabits) habits.value = JSON.parse(savedHabits)
+        if (savedCompletions) completions.value = JSON.parse(savedCompletions)
+        if (savedNotifications) notifications.value = JSON.parse(savedNotifications)
+      }
+    }
+    
+    // Load data from backend
+    onMounted(async () => {
       // Check if user is authenticated
       const user = localStorage.getItem('user')
       if (!user) {
@@ -835,18 +948,7 @@ export default {
       
       console.log('Dashboard mounted, user:', JSON.parse(user))
       
-      const savedHabits = localStorage.getItem('habits')
-      const savedCompletions = localStorage.getItem('completions')
-      const savedNotifications = localStorage.getItem('notifications')
-      
-      if (savedHabits) habits.value = JSON.parse(savedHabits)
-      if (savedCompletions) completions.value = JSON.parse(savedCompletions)
-      if (savedNotifications) notifications.value = JSON.parse(savedNotifications)
-      
-      // Add initial notification
-      if (notifications.value.length === 0) {
-        addNotification("Welcome to your habit tracker! Let's build some great habits together!", 'info')
-      }
+      await loadDataFromBackend()
       
       // Add motivational notifications periodically
       setInterval(() => {
@@ -876,12 +978,7 @@ export default {
       }, 60000) // Check every minute
     })
     
-    // Save data to localStorage when data changes
-    watch([habits, completions, notifications], () => {
-      localStorage.setItem('habits', JSON.stringify(habits.value))
-      localStorage.setItem('completions', JSON.stringify(completions.value))
-      localStorage.setItem('notifications', JSON.stringify(notifications.value))
-    }, { deep: true })
+    // Data is saved to backend immediately, no need for watch
     
     return {
       activeTab,
@@ -953,14 +1050,51 @@ export default {
 
 // Dashboard Greetings
 .dashboard-greetings {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 1rem;
-  padding: 2rem;
+  /* removed the 'tile' so the greeting sits directly on the page */
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  padding: 0.5rem 0;
   margin-bottom: 2rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  text-align: center;
+  box-shadow: none;
+  text-align: left;
+}
+
+/* Greeting enter animation */
+.greeting-fade-enter-active {
+  /* You can change --greeting-delay to delay the whole greeting animation */
+  --greeting-delay: 0.30s;
+  transition: opacity .45s cubic-bezier(.2,.8,.2,1), transform .45s cubic-bezier(.2,.8,.2,1);
+  transition-delay: var(--greeting-delay);
+}
+.greeting-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+.greeting-fade-enter-to {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stagger title and subtitle for a nicer effect */
+.greeting-fade-enter-from .greetings-title,
+.greeting-fade-enter-from .greetings-subtitle {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.greeting-fade-enter-active .greetings-title {
+  transition: opacity .45s cubic-bezier(.2,.8,.2,1), transform .45s cubic-bezier(.2,.8,.2,1);
+  transition-delay: calc(var(--greeting-delay) + 0s);
+}
+.greeting-fade-enter-active .greetings-subtitle {
+  transition: opacity .45s cubic-bezier(.2,.8,.2,1), transform .45s cubic-bezier(.2,.8,.2,1);
+  transition-delay: calc(var(--greeting-delay) + 0.12s);
+}
+.greeting-fade-enter-to .greetings-title,
+.greeting-fade-enter-to .greetings-subtitle {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .greetings-title {

@@ -1,7 +1,7 @@
 <template>
   <div class="login-form-container glass">
     <div class="form-header">
-      <h3 class="font-display text-lg font-semibold mb-4">Create New Habit</h3>
+      <h3 class="font-display text-lg font-semibold mb-4">{{ isEditing ? 'Edit Habit' : 'Create New Habit' }}</h3>
     </div>
     
     <form @submit.prevent="handleSubmit" class="space-y-4">
@@ -70,7 +70,7 @@
       
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">
-          Create Habit
+          {{ isEditing ? 'Update Habit' : 'Create Habit' }}
         </button>
         <button type="button" @click="$emit('cancel')" class="btn btn-outline">
           Cancel
@@ -81,12 +81,18 @@
 </template>
 
 <script>
-import { reactive } from 'vue'
+import { reactive, watch, computed } from 'vue'
 
 export default {
   name: 'HabitForm',
+  props: {
+    habit: {
+      type: Object,
+      default: null
+    }
+  },
   emits: ['submit', 'cancel'],
-  setup(_, { emit }) {
+  setup(props, { emit }) {
     const colors = [
       '#df2531', '#f3701e', '#e8d8c9', '#ffed00',
       '#9fd700', '#00a6c0', '#60519b', '#c837ab'
@@ -101,10 +107,21 @@ export default {
       targetDays: 7
     })
     
-    const handleSubmit = () => {
-      if (form.name.trim()) {
-        emit('submit', { ...form })
-        // Reset form
+    const isEditing = computed(() => !!props.habit)
+    
+    // Watch for habit prop changes to populate form
+    watch(() => props.habit, (newHabit) => {
+      if (newHabit) {
+        Object.assign(form, {
+          name: newHabit.name || '',
+          description: newHabit.description || '',
+          frequency: newHabit.frequency || 'daily',
+          reminderTime: newHabit.reminderTime || '',
+          color: newHabit.color || colors[0],
+          targetDays: newHabit.targetDays || 7
+        })
+      } else {
+        // Reset form for new habit
         Object.assign(form, {
           name: '',
           description: '',
@@ -114,11 +131,33 @@ export default {
           targetDays: 7
         })
       }
+    }, { immediate: true })
+    
+    const handleSubmit = () => {
+      if (form.name.trim()) {
+        const habitData = { ...form }
+        if (props.habit) {
+          habitData.id = props.habit.id
+        }
+        emit('submit', habitData)
+        // Don't reset form here for editing, let parent handle it
+        if (!props.habit) {
+          Object.assign(form, {
+            name: '',
+            description: '',
+            frequency: 'daily',
+            reminderTime: '',
+            color: colors[0],
+            targetDays: 7
+          })
+        }
+      }
     }
     
     return {
       colors,
       form,
+      isEditing,
       handleSubmit
     }
   }

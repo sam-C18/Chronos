@@ -4,13 +4,14 @@ A beautiful, minimal habit tracking web application built with Vue.js 3, featuri
 
 ## Features
 
-- **🔐 Authentication**: Clean login/signup page with smooth transitions
+- **🔐 Authentication**: Secure login/signup with email verification and account validation
+- **�️ Data Isolation**: Strict user data separation - each user only sees their own data
 - **📊 Dashboard**: Overview of habits, streaks, and progress with visual charts
 - **📅 Calendar View**: Weekly calendar to track daily habit completion
 - **📈 Analytics**: Detailed analytics and performance tracking
 - **➕ Habit Management**: Create, edit, and delete habits with custom colors
 - **🔔 Notifications**: Motivational messages and progress updates
-- **💾 Local Storage**: Data persistence using browser localStorage
+- **💾 Database Storage**: Data persistence using SQLite database with user-specific tables
 - **📱 Responsive**: Mobile-friendly design
 
 ## Design Features
@@ -25,63 +26,114 @@ A beautiful, minimal habit tracking web application built with Vue.js 3, featuri
 ## Tech Stack
 
 - **Frontend**: Vue.js 3 with Composition API
+- **Backend**: Node.js with Express
+- **Database**: SQLite
+- **Authentication**: bcrypt for password hashing
 - **Build Tool**: Vite
 - **Styling**: SCSS with custom design system
 - **Routing**: Vue Router
 - **State Management**: Pinia
 - **Date Handling**: date-fns
 - **Charts**: Custom SVG implementations (no external chart library)
+- **HTTP Client**: Axios
 
 ## Project Structure
 
 ```
 habit-tracker/
+├── backend/
+│   ├── server.js               # Express server with authentication APIs
+│   └── package.json            # Backend dependencies
 ├── src/
 │   ├── components/
 │   │   ├── Navbar.vue          # Navigation with notifications
 │   │   ├── HabitCard.vue       # Individual habit display
 │   │   └── HabitForm.vue       # Create/edit habit form
 │   ├── views/
-│   │   ├── LoginPage.vue       # Authentication page
+│   │   ├── LoginPage.vue       # Authentication page with validation
 │   │   └── Dashboard.vue       # Main application view
 │   ├── styles/
 │   │   └── main.scss           # Global styles and design system
 │   ├── App.vue                 # Root component
 │   └── main.js                 # Application entry point
 ├── index.html                  # HTML template
-├── package.json                # Dependencies
+├── package.json                # Frontend dependencies
 └── vite.config.js             # Vite configuration
 ```
 
 ## Installation & Setup
 
-1. **Install dependencies**:
+1. **Install frontend dependencies**:
    ```bash
    npm install
    ```
 
-2. **Start development server**:
+2. **Install backend dependencies**:
+   ```bash
+   cd backend
+   npm install
+   cd ..
+   ```
+
+3. **Start the backend server**:
+   ```bash
+   cd backend
+   npm start
+   ```
+   The backend will run on http://localhost:3000
+
+4. **Start the frontend development server** (in a new terminal):
    ```bash
    npm run dev
    ```
+   The frontend will run on http://localhost:5173
 
-3. **Build for production**:
+5. **Build for production**:
    ```bash
    npm run build
    ```
 
-4. **Preview production build**:
+6. **Preview production build**:
    ```bash
    npm run preview
    ```
 
+## Authentication System
+
+The app includes a comprehensive email verification and account validation system with strict data isolation:
+
+- **Email Existence Check**: Validates whether an email already exists in the database
+- **Duplicate Prevention**: Prevents creation of multiple accounts with the same email
+- **Frontend Validation**: Real-time email checking with user feedback
+- **Backend Enforcement**: Server-side validation to ensure data integrity
+- **Secure Passwords**: Passwords are hashed using bcrypt before storage
+- **Data Isolation**: Each user can only access their own habits, completions, and notifications
+- **Session Management**: User data is cleared on login/logout to prevent cross-user contamination
+
+### API Endpoints
+
+- `GET /api/check-email?email=<email>`: Check if email exists
+- `POST /api/signup`: Create new account
+- `POST /api/login`: Authenticate user
+- `GET /api/habits`: Get user's habits
+- `POST /api/habits`: Create new habit
+- `PUT /api/habits/:id`: Update habit
+- `DELETE /api/habits/:id`: Delete habit
+- `GET /api/completions`: Get user's completions
+- `POST /api/completions`: Update completion status
+- `GET /api/notifications`: Get user's notifications
+- `POST /api/notifications`: Create notification
+- `PUT /api/notifications/:id/read`: Mark notification as read
+
 ## Usage
 
-1. **Login**: Use any email and password to access the app
-2. **Create Habits**: Click "New Habit" to add your first habit
-3. **Track Progress**: Mark habits as complete in the calendar view
-4. **View Analytics**: Check your progress and streaks in the analytics tab
-5. **Stay Motivated**: Receive notifications and motivational messages
+1. **Sign Up**: Enter a unique email and password to create an account
+2. **Email Validation**: The system checks if the email is already registered
+3. **Login**: Use your registered email and password to access the app
+4. **Create Habits**: Click "New Habit" to add your first habit
+5. **Track Progress**: Mark habits as complete in the calendar view
+6. **View Analytics**: Check your progress and streaks in the analytics tab
+7. **Stay Motivated**: Receive notifications and motivational messages
 
 ## Key Components
 
