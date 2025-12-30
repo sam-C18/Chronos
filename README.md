@@ -98,6 +98,43 @@ habit-tracker/
    npm run preview
    ```
 
+## Deployment
+
+### Frontend Deployment
+
+1. **Build the frontend**:
+   ```bash
+   npm run build
+   ```
+
+2. **Environment Configuration**:
+   Create a `.env` file in the root directory:
+   ```
+   VITE_API_BASE_URL=https://your-backend-url.com
+   ```
+
+3. **Deploy the `dist` folder** to your static hosting service (Netlify, Vercel, etc.)
+
+### Backend Deployment
+
+1. **Environment Configuration**:
+   Create a `.env` file in the `backend` directory:
+   ```
+   PORT=3000
+   ```
+
+2. **Deploy to a server** (Heroku, Railway, DigitalOcean, etc.)
+
+### Full-Stack Deployment Example
+
+For platforms like Railway or Render:
+
+1. **Backend**: Deploy the `backend` folder as a Node.js service
+2. **Frontend**: Deploy the built `dist` folder as a static site
+3. **Database**: SQLite will create a local database file
+
+Make sure to update the `VITE_API_BASE_URL` in the frontend to point to your deployed backend URL.
+
 ## Authentication System
 
 The app includes a comprehensive email verification and account validation system with strict data isolation:

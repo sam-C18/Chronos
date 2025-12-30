@@ -3,6 +3,7 @@ const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const bodyParser = require('body-parser');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ function createTables() {
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
+    name TEXT,
     password TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -61,6 +63,13 @@ function createTables() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`);
+
+  // Add name column if not exists
+  db.run(`ALTER TABLE users ADD COLUMN name TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding name column:', err);
+    }
+  });
 }
 
 // Routes
@@ -72,7 +81,8 @@ app.get('/api/check-email', (req, res) => {
     return res.status(400).json({ error: 'Email is required' });
   }
 
-  db.get('SELECT id FROM users WHERE email = ?', [email], (err, row) => {
+  const normalizedEmail = email.toLowerCase();
+  db.get('SELECT id FROM users WHERE email = ?', [normalizedEmail], (err, row) => {
     if (err) {
       return res.status(500).json({ error: 'Database error' });
     }
@@ -82,15 +92,22 @@ app.get('/api/check-email', (req, res) => {
 
 // Signup
 app.post('/api/signup', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, name } = req.body;
+  
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: 'Email, password, and name are required' });
+  }
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' });
+  const normalizedEmail = email.toLowerCase().trim();
+  const trimmedName = name.trim();
+
+  if (!normalizedEmail || !password || !trimmedName) {
+    return res.status(400).json({ error: 'Email, password, and name are required' });
   }
 
   try {
     // Check if email already exists
-    db.get('SELECT id FROM users WHERE email = ?', [email], (err, row) => {
+    db.get('SELECT id FROM users WHERE email = ?', [normalizedEmail], (err, row) => {
       if (err) {
         return res.status(500).json({ error: 'Database error' });
       }
@@ -104,8 +121,8 @@ app.post('/api/signup', async (req, res) => {
           return res.status(500).json({ error: 'Error hashing password' });
         }
 
-        // Insert user
-        db.run('INSERT INTO users (email, password) VALUES (?, ?)', [email, hash], function(err) {
+        // Insert user with normalized email
+        db.run('INSERT INTO users (email, name, password) VALUES (?, ?, ?)', [normalizedEmail, trimmedName, hash], function(err) {
           if (err) {
             return res.status(500).json({ error: 'Error creating account' });
           }
@@ -126,7 +143,9 @@ app.post('/api/login', (req, res) => {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
-  db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  db.get('SELECT * FROM users WHERE email = ?', [normalizedEmail], (err, user) => {
     if (err) {
       return res.status(500).json({ error: 'Database error' });
     }
@@ -139,7 +158,7 @@ app.post('/api/login', (req, res) => {
         return res.status(500).json({ error: 'Error verifying password' });
       }
       if (result) {
-        res.json({ message: 'Login successful', user: { id: user.id, email: user.email } });
+        res.json({ message: 'Login successful', user: { id: user.id, email: user.email, name: user.name } });
       } else {
         res.status(401).json({ error: 'Invalid password' });
       }
@@ -160,6 +179,37 @@ const requireAuth = (req, res, next) => {
   req.userId = parsedId;
   next();
 };
+
+// Get user profile
+app.get('/api/user/profile', requireAuth, (req, res) => {
+  db.get('SELECT id, email, name FROM users WHERE id = ?', [req.userId], (err, user) => {
+    if (err) {
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
+  });
+});
+
+// Update user profile
+app.put('/api/user/profile', requireAuth, (req, res) => {
+  const { name } = req.body;
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+
+  db.run('UPDATE users SET name = ? WHERE id = ?', [name.trim(), req.userId], function(err) {
+    if (err) {
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ message: 'Profile updated successfully' });
+  });
+});
 
 // Habits API
 app.get('/api/habits', requireAuth, (req, res) => {

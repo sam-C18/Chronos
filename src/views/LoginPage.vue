@@ -2,49 +2,62 @@
   <div class="login-page">
     <div class="grain-overlay"></div>
     <div class="login-container">
-      <div class="login-card glass">
-        <div class="login-header">
+      <div class="login-card glass animate-scale-in">
+        <div class="login-header animate-fade-in-up">
           <h1 class="font-display text-3xl font-bold mb-2">Habit Tracker</h1>
           <p class="text-gray-600 mb-8">Build better habits, one day at a time</p>
         </div>
         
         <form @submit.prevent="handleSubmit" class="login-form">
-          <div class="form-group">
+          <div class="form-group animate-fade-in-left animate-stagger-1">
             <label for="email" class="form-label">Email</label>
             <input
               id="email"
               v-model="form.email"
               type="email"
-              class="input"
+              class="input transition-all"
               placeholder="Enter your email"
               required
               @blur="checkEmail"
             />
-            <p v-if="errors.email" class="error-message">{{ errors.email }}</p>
+            <p v-if="errors.email" class="error-message animate-shake">{{ errors.email }}</p>
           </div>
           
-          <div class="form-group">
+          <div class="form-group animate-fade-in-left animate-stagger-2">
             <label for="password" class="form-label">Password</label>
             <input
               id="password"
               v-model="form.password"
               type="password"
-              class="input"
+              class="input transition-all"
               placeholder="Enter your password"
               required
             />
-            <p v-if="errors.password" class="error-message">{{ errors.password }}</p>
+            <p v-if="errors.password" class="error-message animate-shake">{{ errors.password }}</p>
           </div>
           
-          <p v-if="errors.general" class="error-message general">{{ errors.general }}</p>
+          <div v-if="!isLogin" class="form-group animate-fade-in-left animate-stagger-3">
+            <label for="name" class="form-label">Name</label>
+            <input
+              id="name"
+              v-model="form.name"
+              type="text"
+              class="input transition-all"
+              placeholder="Enter your full name"
+              required
+            />
+          </div>
           
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary btn-lg w-full" :disabled="loading">
+          <p v-if="errors.general" class="error-message general animate-shake">{{ errors.general }}</p>
+          
+          <div class="form-actions animate-fade-in-up animate-stagger-3">
+            <button type="submit" class="btn btn-primary btn-lg w-full interactive ripple" :disabled="loading">
+              <span v-if="loading" class="loading-spinner"></span>
               {{ loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Sign Up') }}
             </button>
           </div>
           
-          <div class="form-switch">
+          <div class="form-switch animate-fade-in-up animate-stagger-4">
             <p class="text-sm text-gray-600">
               {{ isLogin ? "Don't have an account?" : "Already have an account?" }}
               <button
@@ -63,19 +76,23 @@
 </template>
 
 <script>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import config from '../config.js'
+import { useUserStore } from '../stores/user.js'
 
 export default {
   name: 'LoginPage',
   setup() {
     const router = useRouter()
+    const userStore = useUserStore()
     const isLogin = ref(true)
     
     const form = reactive({
       email: '',
-      password: ''
+      password: '',
+      name: ''
     })
     
     const errors = reactive({
@@ -88,12 +105,22 @@ export default {
     const emailChecked = ref(false)
     const emailExists = ref(false)
     
+    onMounted(() => {
+      const urlParams = new URLSearchParams(window.location.search)
+      if (urlParams.get('reset') === 'success') {
+        resetSuccess.value = true
+        // Clear the URL parameter
+        router.replace('/login')
+      }
+    })
+    
     const toggleMode = () => {
       isLogin.value = !isLogin.value
       // Reset errors when switching modes
       errors.email = ''
       errors.password = ''
       errors.general = ''
+      form.name = ''
       emailChecked.value = false
     }
     
@@ -101,7 +128,7 @@ export default {
       if (!form.email) return
       
       try {
-        const response = await axios.get(`http://localhost:3000/api/check-email?email=${form.email}`)
+        const response = await axios.get(`${config.API_BASE_URL}/api/check-email?email=${form.email}`)
         emailExists.value = response.data.exists
         emailChecked.value = true
         
@@ -129,7 +156,7 @@ export default {
       errors.general = ''
       errors.password = ''
       
-      if (!form.email || !form.password) {
+      if (!form.email || !form.password || (!isLogin.value && !(form.name?.trim()))) {
         errors.general = 'Please fill in all fields'
         return
       }
@@ -139,27 +166,28 @@ export default {
       try {
         let response
         if (isLogin.value) {
-          response = await axios.post('http://localhost:3000/api/login', {
+          response = await axios.post(`${config.API_BASE_URL}/api/login`, {
             email: form.email,
             password: form.password
           })
           // Clear any existing user data before setting new user
           clearUserData()
-          localStorage.setItem('user', JSON.stringify(response.data.user))
+          userStore.setUser(response.data.user)
           router.push('/dashboard')
         } else {
-          response = await axios.post('http://localhost:3000/api/signup', {
+          response = await axios.post(`${config.API_BASE_URL}/api/signup`, {
             email: form.email,
-            password: form.password
+            password: form.password,
+            name: form.name
           })
           // Clear any existing user data before setting new user
           clearUserData()
           // After signup, automatically log in
-          const loginResponse = await axios.post('http://localhost:3000/api/login', {
+          const loginResponse = await axios.post(`${config.API_BASE_URL}/api/login`, {
             email: form.email,
             password: form.password
           })
-          localStorage.setItem('user', JSON.stringify(loginResponse.data.user))
+          userStore.setUser(loginResponse.data.user)
           router.push('/dashboard')
         }
       } catch (error) {

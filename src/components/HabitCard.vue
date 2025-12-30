@@ -1,5 +1,5 @@
 <template>
-  <div class="habit-card card">
+  <div class="habit-card card animate-fade-in-up hover-lift">
     <div class="habit-header">
       <div class="habit-info">
         <h3 class="habit-name font-semibold">{{ habit.name }}</h3>
@@ -9,7 +9,7 @@
           <span class="habit-reminder">{{ habit.reminderTime || 'No reminder' }}</span>
         </div>
       </div>
-      <div class="habit-color" :style="{ backgroundColor: habit.color }"></div>
+      <div class="habit-color animate-pulse" :style="{ backgroundColor: habit.color }"></div>
     </div>
     
     <div v-if="habit.description" class="habit-description">
@@ -17,11 +17,11 @@
     </div>
     
     <div class="habit-stats">
-      <div class="stat">
+      <div class="stat animate-fade-in-left animate-stagger-1">
         <span class="stat-label">Streak</span>
         <span class="stat-value">{{ streak }} days</span>
       </div>
-      <div class="stat">
+      <div class="stat animate-fade-in-left animate-stagger-2">
         <span class="stat-label">Completion</span>
         <span class="stat-value">{{ completionRate }}%</span>
       </div>
@@ -33,8 +33,10 @@
         :class="[
           'btn',
           'w-full',
+          'interactive',
+          'ripple',
           {
-            'btn-completed': todayCompletion?.completed,
+            'btn-completed animate-bounce-in': todayCompletion?.completed,
             'btn-primary': !todayCompletion?.completed
           }
         ]"
@@ -44,22 +46,22 @@
       </button>
       
       <div class="habit-controls">
-        <button @click="$emit('edit', habit)" class="btn btn-outline btn-sm">
+        <button @click="$emit('edit', habit)" class="btn btn-outline btn-sm interactive hover-scale">
           Edit
         </button>
-        <button @click="confirmDelete" class="btn btn-danger btn-sm delete-btn">
+        <button @click="confirmDelete" class="btn btn-danger btn-sm delete-btn interactive hover-rotate">
           🗑️
         </button>
       </div>
       
       <!-- Delete Confirmation Modal -->
-      <div v-if="showDeleteConfirm" class="delete-modal">
-        <div class="delete-modal-content">
+      <div v-if="showDeleteConfirm" class="delete-modal animate-fade-in">
+        <div class="delete-modal-content animate-scale-in">
           <h3>Delete Habit</h3>
           <p>Are you sure you want to delete "{{ habit.name }}"? This action cannot be undone.</p>
           <div class="delete-modal-actions">
-            <button @click="cancelDelete" class="btn btn-outline btn-sm">Cancel</button>
-            <button @click="confirmDeleteAction" class="btn btn-danger btn-sm">Delete</button>
+            <button @click="cancelDelete" class="btn btn-outline btn-sm interactive">Cancel</button>
+            <button @click="confirmDeleteAction" class="btn btn-danger btn-sm interactive animate-shake">Delete</button>
           </div>
         </div>
       </div>

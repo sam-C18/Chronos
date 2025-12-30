@@ -2,7 +2,7 @@
   <div class="navbar">
     <div class="navbar-content">
       <div class="navbar-brand">
-        <h1 class="font-display text-xl font-bold">Habit Tracker</h1>
+        <h1 class="font-display text-xl font-bold" @click="goToDashboard" style="cursor: pointer;">Habit Tracker</h1>
       </div>
       
       <div class="navbar-nav">
@@ -68,6 +68,10 @@
           </transition>
         </div>
         
+        <button @click="goToProfile" class="btn btn-outline btn-sm">
+          Profile
+        </button>
+        
         <button @click="logout" class="btn btn-outline btn-sm">
           Logout
         </button>
@@ -77,9 +81,10 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { format, parseISO } from 'date-fns'
+import { useUserStore } from '../stores/user.js'
 
 export default {
   name: 'Navbar',
@@ -92,6 +97,7 @@ export default {
   emits: ['tab-change'],
   setup(props, { emit }) {
     const router = useRouter()
+    const userStore = useUserStore()
     const showNotifications = ref(false)
     
     const tabs = [
@@ -115,8 +121,23 @@ export default {
       notifications.value.filter(n => !n.read).length
     )
     
-    const setActiveTab = (tabId) => {
-      emit('tab-change', tabId)
+    const setActiveTab = async (tabId) => {
+      // If we're not on dashboard, navigate there first
+      if (router.currentRoute.value.path !== '/dashboard') {
+        router.push('/dashboard')
+        // Wait for the route to change and component to mount, then emit the tab change
+        await nextTick()
+        // Small delay to ensure Dashboard component is fully mounted
+        setTimeout(() => {
+          emit('tab-change', tabId)
+        }, 50)
+      } else {
+        emit('tab-change', tabId)
+      }
+    }
+    
+    const goToDashboard = () => {
+      router.push('/dashboard')
     }
     
     const toggleNotifications = () => {
@@ -135,8 +156,12 @@ export default {
     }
     
     const logout = () => {
-      localStorage.removeItem('user')
+      userStore.logout()
       router.push('/')
+    }
+    
+    const goToProfile = () => {
+      router.push('/profile')
     }
     
     return {
@@ -148,7 +173,9 @@ export default {
       toggleNotifications,
       markAsRead,
       formatTime,
-      logout
+      logout,
+      goToProfile,
+      goToDashboard
     }
   }
 }
