@@ -216,4 +216,10 @@ The app uses a custom design system with:
 
 ## License
 
-MIT License - feel free to use this project for personal or commercial purposes.
+**PROPRIETARY SOFTWARE** - All Rights Reserved
+
+This software is protected by copyright law. Unauthorized copying, modification, distribution, or use of this software is strictly prohibited.
+
+See [LICENSE](LICENSE) file for full terms and conditions.
+
+For licensing inquiries or commercial use permissions, please contact the copyright holder.
