@@ -13,7 +13,7 @@ Local data does not sync across devices or browsers. Anyone with access to the s
 
 ## Run locally
 
-Requirements: Node.js 18–20 and npm.
+Requirements: Node.js 24 and npm.
 
 ```bash
 npm install
