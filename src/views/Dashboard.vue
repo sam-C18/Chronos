@@ -1,11 +1,11 @@
 <template>
   <div class="dashboard">
-    <div class="grain-overlay"></div>
     
     <Navbar 
       :active-tab="activeTab" 
       :notifications="notifications"
       @tab-change="setActiveTab"
+      @notification-read="markNotificationRead"
     />
     
     <div class="dashboard-content">
@@ -512,7 +512,6 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday as isDateToday, parseISO } from 'date-fns'
-import axios from 'axios'
 import Navbar from '../components/Navbar.vue'
 import HabitCard from '../components/HabitCard.vue'
 import HabitForm from '../components/HabitForm.vue'
@@ -530,7 +529,6 @@ import {
   Tooltip,
   Legend
 } from 'chart.js'
-import config from '../config.js'
 import { useUserStore } from '../stores/user.js'
 
 // Register Chart.js components
@@ -1066,12 +1064,6 @@ export default {
       const completed = existing ? !existing.completed : true
       
       try {
-        await apiCall('post', '/api/completions', {
-          habitId: parseInt(habitId),
-          date: dateStr,
-          completed
-        })
-        
         // Update local state
         if (existing) {
           existing.completed = completed
@@ -1118,14 +1110,6 @@ export default {
     const createHabit = async (habitData) => {
       try {
         if (habitData.id) {
-          // Update existing habit
-          await apiCall('put', `/api/habits/${habitData.id}`, {
-            name: habitData.name,
-            description: habitData.description,
-            frequency: habitData.frequency,
-            color: habitData.color
-          })
-          
           // Update local state
           const index = habits.value.findIndex(h => h.id === habitData.id)
           if (index !== -1) {
@@ -1140,24 +1124,8 @@ export default {
           addNotification(`Habit "${habitData.name}" updated successfully!`, 'success')
           editingHabit.value = null
         } else {
-          // Try to create habit via API
-          let habitId
-          try {
-            const response = await apiCall('post', '/api/habits', {
-              name: habitData.name,
-              description: habitData.description,
-              frequency: habitData.frequency,
-              color: habitData.color
-            })
-            habitId = response.data.id
-          } catch (apiError) {
-            console.warn('API call failed, falling back to localStorage:', apiError)
-            // Fallback to localStorage if API fails
-            habitId = Date.now().toString()
-          }
-          
           const habit = {
-            id: habitId,
+            id: Date.now().toString(),
             name: habitData.name,
             description: habitData.description,
             frequency: habitData.frequency,
@@ -1182,22 +1150,9 @@ export default {
     }
     
     const deleteHabit = async (habitId) => {
-      try {
-        await apiCall('delete', `/api/habits/${habitId}`)
-        
-        // Update local state
-        habits.value = habits.value.filter(h => h.id !== habitId)
-        completions.value = completions.value.filter(c => c.habitId !== habitId)
-        
-        addNotification('Habit deleted successfully!', 'success')
-      } catch (error) {
-        console.warn('API call failed, updating local state only:', error)
-        // Still update local state even if API fails
-        habits.value = habits.value.filter(h => h.id !== habitId)
-        completions.value = completions.value.filter(c => c.habitId !== habitId)
-        
-        addNotification('Habit deleted successfully!', 'success')
-      }
+      habits.value = habits.value.filter(h => h.id !== habitId)
+      completions.value = completions.value.filter(c => c.habitId !== habitId)
+      addNotification('Habit deleted successfully!', 'success')
     }
     
     const addNotification = async (message, type = 'info') => {
@@ -1211,16 +1166,6 @@ export default {
       
       notifications.value.unshift(notification)
       
-      // Try to save to backend, but don't fail if it doesn't work
-      try {
-        await apiCall('post', '/api/notifications', {
-          message,
-          type
-        })
-      } catch (error) {
-        console.warn('Failed to save notification to backend:', error)
-      }
-      
       // Auto-remove notification after 10 seconds
       setTimeout(() => {
         const index = notifications.value.findIndex(n => n.id === notification.id)
@@ -1228,6 +1173,11 @@ export default {
           notifications.value.splice(index, 1)
         }
       }, 10000)
+    }
+
+    const markNotificationRead = (id) => {
+      const notification = notifications.value.find(item => item.id === id)
+      if (notification) notification.read = true
     }
     
     const previousWeek = () => {
@@ -1405,79 +1355,14 @@ export default {
       ).length
     }
     
-    // API helper functions
-    const getUserId = () => {
-      return userStore.user?.id || null
-    }
-    
-    const apiCall = async (method, url, data = null) => {
-      const userId = getUserId()
-      if (!userId) throw new Error('User not authenticated')
-      
-      const axiosConfig = {
-        method,
-        url: `${config.API_BASE_URL}${url}`,
-        headers: {
-          'user-id': userId,
-          'Content-Type': 'application/json'
-        }
+    onMounted(() => {
+      userStore.ensureProfile()
+      habits.value = userStore.profile.habits
+      completions.value = userStore.profile.completions
+      notifications.value = userStore.profile.notifications
+      if (notifications.value.length === 0) {
+        addNotification("Welcome to your habit tracker! Let's build some great habits together!", 'info')
       }
-      
-      if (data) axiosConfig.data = data
-      
-      return axios(axiosConfig)
-    }
-    
-    const loadDataFromBackend = async () => {
-      try {
-        const [habitsRes, completionsRes, notificationsRes] = await Promise.all([
-          apiCall('get', '/api/habits'),
-          apiCall('get', '/api/completions'),
-          apiCall('get', '/api/notifications')
-        ])
-        
-        habits.value = habitsRes.data
-        completions.value = completionsRes.data.map(c => ({
-          ...c,
-          habitId: c.habit_id,
-          completed: Boolean(c.completed)
-        }))
-        notifications.value = notificationsRes.data.map(n => ({
-          ...n,
-          read: Boolean(n.read)
-        }))
-        
-        // Add initial notification if none exist
-        if (notifications.value.length === 0) {
-          await addNotification("Welcome to your habit tracker! Let's build some great habits together!", 'info')
-        }
-      } catch (error) {
-        console.error('Error loading data from backend, falling back to localStorage:', error)
-        // Fallback to localStorage if backend fails
-        const savedHabits = localStorage.getItem('habits')
-        const savedCompletions = localStorage.getItem('completions')
-        const savedNotifications = localStorage.getItem('notifications')
-        
-        if (savedHabits) habits.value = JSON.parse(savedHabits)
-        if (savedCompletions) completions.value = JSON.parse(savedCompletions)
-        if (savedNotifications) notifications.value = JSON.parse(savedNotifications)
-      }
-    }
-    
-    // Load data from backend
-    onMounted(async () => {
-      // Check if user is authenticated
-      const user = localStorage.getItem('user')
-      if (!user) {
-        console.log('No user found, redirecting to login')
-        // Redirect to login if no user
-        window.location.href = '/'
-        return
-      }
-      
-      console.log('Dashboard mounted, user:', JSON.parse(user))
-      
-      await loadDataFromBackend()
       
       // Add motivational notifications periodically
       setInterval(() => {
@@ -1507,7 +1392,17 @@ export default {
       }, 60000) // Check every minute
     })
     
-    // Data is saved to backend immediately, no need for watch
+    watch([habits, completions, notifications], () => {
+      try {
+        userStore.saveData({
+          habits: habits.value,
+          completions: completions.value,
+          notifications: notifications.value
+        })
+      } catch (error) {
+        console.error('Could not persist habit tracker data in this browser.', error)
+      }
+    }, { deep: true })
     
     return {
       activeTab,
@@ -1515,6 +1410,7 @@ export default {
       habits,
       completions,
       notifications,
+      markNotificationRead,
       showNewHabitForm,
       editingHabit,
       weekDays,

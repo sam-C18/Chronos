@@ -57,7 +57,7 @@
                 >
                   <p class="notification-message">{{ notification.message }}</p>
                   <p class="notification-time">
-                    {{ formatTime(notification.timestamp) }}
+                    {{ formatTime(notification.timestamp || notification.created_at) }}
                   </p>
                 </div>
                 <div v-if="notifications.length === 0" class="notification-empty">
@@ -72,9 +72,6 @@
           Profile
         </button>
         
-        <button @click="logout" class="btn btn-outline btn-sm">
-          Logout
-        </button>
       </div>
     </div>
   </div>
@@ -84,7 +81,6 @@
 import { ref, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { format, parseISO } from 'date-fns'
-import { useUserStore } from '../stores/user.js'
 
 export default {
   name: 'Navbar',
@@ -92,12 +88,15 @@ export default {
     activeTab: {
       type: String,
       default: 'dashboard'
+    },
+    notifications: {
+      type: Array,
+      default: () => []
     }
   },
-  emits: ['tab-change'],
+  emits: ['tab-change', 'notification-read'],
   setup(props, { emit }) {
     const router = useRouter()
-    const userStore = useUserStore()
     const showNotifications = ref(false)
     
     const tabs = [
@@ -107,18 +106,8 @@ export default {
       { id: 'habits', label: 'Habits' }
     ]
     
-    const notifications = ref([
-      {
-        id: '1',
-        message: "Welcome to your habit tracker! Let's build some great habits together!",
-        type: 'info',
-        read: false,
-        timestamp: new Date().toISOString()
-      }
-    ])
-    
     const unreadCount = computed(() => 
-      notifications.value.filter(n => !n.read).length
+      props.notifications.filter(n => !n.read).length
     )
     
     const setActiveTab = async (tabId) => {
@@ -145,19 +134,12 @@ export default {
     }
     
     const markAsRead = (id) => {
-      const notification = notifications.value.find(n => n.id === id)
-      if (notification) {
-        notification.read = true
-      }
+      emit('notification-read', id)
     }
     
     const formatTime = (timestamp) => {
-      return format(parseISO(timestamp), 'MMM d, h:mm a')
-    }
-    
-    const logout = () => {
-      userStore.logout()
-      router.push('/')
+      const date = parseISO(timestamp || '')
+      return Number.isNaN(date.getTime()) ? '' : format(date, 'MMM d, h:mm a')
     }
     
     const goToProfile = () => {
@@ -166,14 +148,13 @@ export default {
     
     return {
       tabs,
-      notifications,
+      notifications: props.notifications,
       unreadCount,
       showNotifications,
       setActiveTab,
       toggleNotifications,
       markAsRead,
       formatTime,
-      logout,
       goToProfile,
       goToDashboard
     }

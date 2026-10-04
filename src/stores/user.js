@@ -1,30 +1,58 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-export const useUserStore = defineStore('user', () => {
-  const user = ref(JSON.parse(localStorage.getItem('user')) || null)
+const STORAGE_KEY = 'chronos.local-profile.v1'
+const emptyProfile = () => ({
+  name: 'My Profile',
+  habits: [],
+  completions: [],
+  notifications: []
+})
 
-  const setUser = (userData) => {
-    user.value = userData
-    localStorage.setItem('user', JSON.stringify(userData))
+const readProfile = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return emptyProfile()
+    return {
+      name: typeof saved.name === 'string' ? saved.name : 'My Profile',
+      habits: Array.isArray(saved.habits) ? saved.habits : [],
+      completions: Array.isArray(saved.completions) ? saved.completions : [],
+      notifications: Array.isArray(saved.notifications) ? saved.notifications : []
+    }
+  } catch (error) {
+    console.warn('Could not read the local profile; starting with an empty profile.', error)
+    return emptyProfile()
   }
+}
 
-  const updateName = (newName) => {
-    if (user.value) {
-      user.value.name = newName
-      localStorage.setItem('user', JSON.stringify(user.value))
+export const useUserStore = defineStore('user', () => {
+  const profile = ref(readProfile())
+  const user = ref({ id: 'local-profile', name: profile.value.name })
+
+  const persist = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile.value))
+    } catch (error) {
+      console.error('Could not save the local profile.', error)
+      throw error
     }
   }
 
-  const logout = () => {
-    user.value = null
-    localStorage.removeItem('user')
+  const updateName = (newName) => {
+    profile.value.name = newName
+    user.value = { id: 'local-profile', name: newName }
+    persist()
   }
 
-  return {
-    user,
-    setUser,
-    updateName,
-    logout
+  const saveData = ({ habits, completions, notifications }) => {
+    profile.value = { ...profile.value, habits, completions, notifications }
+    persist()
   }
+
+  const ensureProfile = () => {
+    user.value = { id: 'local-profile', name: profile.value.name }
+    persist()
+  }
+
+  return { user, profile, updateName, saveData, ensureProfile }
 })

@@ -1,5 +1,6 @@
 <template>
   <div id="app">
+    <div class="grain-overlay"></div>
     <transition name="page" mode="out-in">
       <router-view />
     </transition>

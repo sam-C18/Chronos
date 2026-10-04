@@ -1,8 +1,7 @@
 <template>
   <div class="profile-page">
-    <div class="grain-overlay"></div>
 
-    <Navbar @tab-change="handleTabChange" />
+    <Navbar />
 
     <div class="profile-content notion-profile-content">
       <div class="container notion-container">
@@ -10,27 +9,14 @@
           <div class="notion-card-header">
             <div>
               <h1 class="profile-page-title font-display">Profile Settings</h1>
-              <p class="profile-page-subtitle">Manage your account information</p>
+              <p class="profile-page-subtitle">Your profile is saved in this browser</p>
             </div>
           </div>
 
           <div class="notion-card-content">
             <form @submit.prevent="handleSubmit" class="notion-profile-form">
               <div class="notion-form-group">
-                <label for="email" class="notion-form-label">Email</label>
-                <input
-                  id="email"
-                  v-model="form.email"
-                  type="email"
-                  class="notion-input"
-                  readonly
-                  disabled
-                />
-                <p class="notion-form-hint">Email cannot be changed</p>
-              </div>
-
-              <div class="notion-form-group">
-                <label for="name" class="notion-form-label">Username</label>
+                <label for="name" class="notion-form-label">Name</label>
                 <input
                   id="name"
                   v-model="form.name"
@@ -38,7 +24,6 @@
                   class="notion-input"
                   placeholder="Enter your username"
                   required
-                  :disabled="loading"
                 />
               </div>
 
@@ -47,9 +32,8 @@
               </div>
 
               <div class="notion-form-actions">
-                <button type="submit" class="notion-btn notion-btn-primary notion-btn-lg" :disabled="loading">
-                  <span v-if="loading" class="loading-spinner"></span>
-                  {{ loading ? 'Saving...' : 'Save Changes' }}
+                <button type="submit" class="notion-btn notion-btn-primary notion-btn-lg">
+                  Save Changes
                 </button>
               </div>
             </form>
@@ -61,10 +45,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from 'axios'
-import config from '../config.js'
+import { ref, reactive, onMounted } from 'vue'
 import { useUserStore } from '../stores/user.js'
 import Navbar from '../components/Navbar.vue'
 
@@ -74,45 +55,16 @@ export default {
     Navbar
   },
   setup() {
-    const router = useRouter()
     const userStore = useUserStore()
 
     const form = reactive({
-      email: '',
       name: ''
     })
 
-    const loading = ref(false)
     const message = ref(null)
-    
-    // Clear message when component mounts or route changes
-    const clearMessage = () => {
-      message.value = null
-    }
-    
-    // Handle tab changes from Navbar - navigate to dashboard
-    const handleTabChange = (tabId) => {
-      router.push('/dashboard')
-    }
 
-    const fetchProfile = async () => {
-      if (!userStore.user) {
-        router.push('/')
-        return
-      }
-
-      try {
-        const response = await axios.get(`${config.API_BASE_URL}/api/user/profile`, {
-          headers: {
-            'user-id': userStore.user.id
-          }
-        })
-        form.email = response.data.email
-        form.name = response.data.name || ''
-      } catch (error) {
-        console.error('Error fetching profile:', error)
-        message.value = { type: 'error', text: 'Failed to load profile' }
-      }
+    const fetchProfile = () => {
+      form.name = userStore.profile.name || ''
     }
 
     const handleSubmit = async () => {
@@ -121,48 +73,23 @@ export default {
         return
       }
 
-      loading.value = true
       message.value = null
-
       try {
-        await axios.put(`${config.API_BASE_URL}/api/user/profile`, {
-          name: form.name.trim()
-        }, {
-          headers: {
-            'user-id': userStore.user.id
-          }
-        })
-
         userStore.updateName(form.name.trim())
-        message.value = { type: 'success', text: 'Profile updated successfully!' }
+        message.value = { type: 'success', text: 'Profile saved in this browser.' }
       } catch (error) {
-        console.error('Error updating profile:', error)
-        if (error.response) {
-          message.value = { type: 'error', text: error.response.data.error || 'Failed to update profile' }
-        } else {
-          message.value = { type: 'error', text: 'Network error. Please try again.' }
-        }
-      } finally {
-        loading.value = false
+        message.value = { type: 'error', text: 'Could not save the profile. Check browser storage space and try again.' }
       }
     }
 
     onMounted(() => {
-      clearMessage()
       fetchProfile()
-    })
-    
-    // Clear message when navigating away or component unmounts
-    onBeforeUnmount(() => {
-      clearMessage()
     })
 
     return {
       form,
-      loading,
       message,
-      handleSubmit,
-      handleTabChange
+      handleSubmit
     }
   }
 }
@@ -176,16 +103,6 @@ export default {
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   position: relative;
   overflow-x: hidden;
-}
-
-.grain-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><filter id="grain"><feTurbulence baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/><feColorMatrix values="0"/></filter></defs><rect width="100%" height="100%" filter="url(%23grain)" opacity="0.1"/></svg>');
-  pointer-events: none;
 }
 
 .notion-profile-content {
